@@ -24,14 +24,18 @@ func (h *HealthHandler) Check(c *gin.Context) {
 	dockerOK := h.dockerPing(ctx) == nil
 	ollamaOK := h.ollamaPing(ctx) == nil
 
+	// El backend siempre responde 200 si puede atender requests.
+	// Docker y Ollama son dependencias opcionales que se reportan como
+	// información pero no determinan la salud del proceso en sí.
+	// Usar 503 aquí causa un deadlock: Docker Compose no marca el
+	// contenedor como "healthy" hasta recibir 200, pero el contenedor
+	// necesita estar "healthy" para que el frontend levante.
 	status := "ok"
-	code := http.StatusOK
-	if !dockerOK {
+	if !dockerOK || !ollamaOK {
 		status = "degraded"
-		code = http.StatusServiceUnavailable
 	}
 
-	c.JSON(code, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"status":    status,
 		"timestamp": time.Now().UTC(),
 		"services": gin.H{
