@@ -61,6 +61,40 @@ echo -e "  $(date '+%Y-%m-%d %H:%M:%S')\n"
 # ── Verificar root ────────────────────────────────────────────────────────────
 [[ $EUID -ne 0 ]] && error "Ejecutar como root: sudo bash install.sh"
 
+# ── Modo forzado: limpia instalación previa antes de continuar ────────────────
+if [[ "${CC_FORCE:-false}" == "true" ]]; then
+    step "Modo forzado — limpiando instalación previa"
+
+    if [[ -d "$INSTALL_DIR" ]]; then
+        # Bajar contenedores de Cloud Control si existen
+        if [[ -f "$INSTALL_DIR/docker-compose.yml" ]]; then
+            warn "Deteniendo contenedores de Cloud Control…"
+            docker compose \
+                -f "$INSTALL_DIR/docker-compose.yml" \
+                -f "$INSTALL_DIR/docker-compose.override.yml" \
+                down --remove-orphans 2>/dev/null || true
+        fi
+        warn "Eliminando directorio $INSTALL_DIR…"
+        rm -rf "$INSTALL_DIR"
+        info "Directorio eliminado"
+    else
+        info "No existía instalación previa en $INSTALL_DIR"
+    fi
+
+    # Bajar Traefik si está corriendo
+    if docker ps --filter "name=traefik" --filter "status=running" | grep -q traefik; then
+        warn "Deteniendo Traefik…"
+        if [[ -f "/opt/traefik/docker-compose.traefik.yml" ]]; then
+            docker compose -f /opt/traefik/docker-compose.traefik.yml down 2>/dev/null || true
+        else
+            docker rm -f traefik 2>/dev/null || true
+        fi
+        info "Traefik detenido"
+    fi
+
+    info "Limpieza completada — iniciando instalación desde cero"
+fi
+
 # ── Detectar OS y gestor de paquetes ─────────────────────────────────────────
 step "Detectando sistema operativo"
 [[ -f /etc/os-release ]] || error "/etc/os-release no encontrado"
