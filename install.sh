@@ -461,7 +461,6 @@ services:
       - "host.docker.internal:host-gateway"
 
   frontend:
-    ports: []
     networks:
       - internal
       - traefik-public
