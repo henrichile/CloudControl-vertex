@@ -390,14 +390,19 @@ if command -v ufw &>/dev/null && [[ "$PKG_FAMILY" == "apt" ]]; then
     ufw deny  11434     comment "Ollama — solo interno" 2>/dev/null || true
     info "UFW: 22, 80, 443 (tcp+udp) abiertos | 11434 bloqueado"
 
-elif command -v firewall-cmd &>/dev/null; then
+elif command -v firewall-cmd &>/dev/null \
+        || [[ -x /usr/bin/firewall-cmd ]] \
+        || [[ -x /usr/sbin/firewall-cmd ]]; then
+    FW_CMD=$(command -v firewall-cmd 2>/dev/null \
+             || { [[ -x /usr/bin/firewall-cmd ]]  && echo /usr/bin/firewall-cmd; } \
+             || echo /usr/sbin/firewall-cmd)
     systemctl enable --now firewalld 2>/dev/null || true
-    firewall-cmd --permanent --add-service=ssh   2>/dev/null || true
-    firewall-cmd --permanent --add-service=http  2>/dev/null || true
-    firewall-cmd --permanent --add-service=https 2>/dev/null || true
-    firewall-cmd --permanent --add-port=443/udp  2>/dev/null || true
-    firewall-cmd --permanent --remove-port=11434/tcp 2>/dev/null || true
-    firewall-cmd --reload 2>/dev/null || true
+    "$FW_CMD" --permanent --add-service=ssh   2>/dev/null || true
+    "$FW_CMD" --permanent --add-service=http  2>/dev/null || true
+    "$FW_CMD" --permanent --add-service=https 2>/dev/null || true
+    "$FW_CMD" --permanent --add-port=443/udp  2>/dev/null || true
+    "$FW_CMD" --permanent --remove-port=11434/tcp 2>/dev/null || true
+    "$FW_CMD" --reload 2>/dev/null || true
     info "firewalld: ssh, http, https (tcp+udp) abiertos | 11434 no expuesto"
 else
     warn "No se encontró UFW ni firewalld — configura el firewall manualmente"
