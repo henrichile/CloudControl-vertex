@@ -470,7 +470,6 @@ services:
       - "traefik.http.routers.cloudcontrol.entrypoints=websecure"
       - "traefik.http.routers.cloudcontrol.tls.certresolver=letsencrypt"
       - "traefik.http.services.cloudcontrol.loadbalancer.server.port=80"
-      - "traefik.http.routers.cloudcontrol.middlewares=secure-headers@docker"
 
 networks:
   traefik-public:
