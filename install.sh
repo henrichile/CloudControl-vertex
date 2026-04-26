@@ -261,8 +261,8 @@ case "$PKG_FAMILY" in
         ;;
     dnf|yum)
         pkg_install curl wget git ca-certificates gnupg2 \
-                    openssl httpd-tools pciutils zstd
-        systemctl enable --now firewalld 2>/dev/null || true
+                    openssl httpd-tools pciutils zstd firewalld
+        systemctl enable --now firewalld
         ;;
 esac
 info "Paquetes base instalados"
