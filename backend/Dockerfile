@@ -1,5 +1,8 @@
 # ── Stage 1: Build ──────────────────────────────────────────────────────────
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
+
+# CGO_ENABLED=1 requiere gcc y musl-dev en alpine
+RUN apk add --no-cache gcc musl-dev
 
 WORKDIR /build
 
