@@ -25,6 +25,17 @@ error()  { echo -e "${RED}  ✖${NC}  $*" >&2; exit 1; }
 step()   { echo -e "\n${BOLD}${BLUE}▶ $*${NC}"; }
 prompt() { echo -e "${CYAN}  ?${NC}  $*"; }
 
+# ── Entrada de teclado robusta frente a curl | bash ───────────────────────────
+# Cuando el script llega por pipe, stdin es el propio contenido del script y
+# los `read` consumirían líneas de código en vez del teclado del usuario.
+# Abrimos /dev/tty explícitamente como fd 3 para todas las lecturas interactivas.
+if [[ -t 0 ]]; then
+    exec 3<&0          # stdin ya es un terminal; reusarlo
+else
+    exec 3</dev/tty    # venimos de pipe (curl | bash); usar el terminal real
+fi
+tty_read() { read "$@" <&3; }
+
 # ── Constantes del proyecto ───────────────────────────────────────────────────
 REPO_URL="https://github.com/henrichile/CloudControl-vertex"
 REPO_BRANCH="${CC_BRANCH:-main}"
@@ -104,26 +115,26 @@ step "Configuración de Cloud Control"
 
 if [[ -z "${CC_DOMAIN:-}" ]]; then
     prompt "Dominio principal para Cloud Control (ej: panel.tudominio.com):"
-    read -r CC_DOMAIN
+    tty_read -r CC_DOMAIN
 fi
 [[ -z "$CC_DOMAIN" ]] && error "El dominio no puede estar vacío"
 
 if [[ -z "${ACME_EMAIL:-}" ]]; then
     prompt "Correo para Let's Encrypt:"
-    read -r ACME_EMAIL
+    tty_read -r ACME_EMAIL
 fi
 [[ -z "$ACME_EMAIL" ]] && error "El correo no puede estar vacío"
 
 if [[ -z "${TRAEFIK_DOMAIN:-}" ]]; then
     _default_traefik="traefik.$CC_DOMAIN"
     prompt "Dominio del dashboard Traefik [${_default_traefik}]:"
-    read -r TRAEFIK_DOMAIN
+    tty_read -r TRAEFIK_DOMAIN
     TRAEFIK_DOMAIN="${TRAEFIK_DOMAIN:-$_default_traefik}"
 fi
 
 if [[ -z "${TRAEFIK_ADMIN_PASS:-}" ]]; then
     prompt "Contraseña para el dashboard de Traefik (usuario: admin):"
-    read -rs TRAEFIK_ADMIN_PASS
+    tty_read -rs TRAEFIK_ADMIN_PASS
     echo
 fi
 [[ -z "$TRAEFIK_ADMIN_PASS" ]] && error "La contraseña no puede estar vacía"
@@ -143,7 +154,7 @@ if [[ -z "${OLLAMA_MODE:-}" ]]; then
     echo -e "  ${CYAN}3)${NC} Omitir — no usar AIOps por ahora"
     echo
     prompt "Elige una opción [1/2/3]:"
-    read -r OLLAMA_MODE
+    tty_read -r OLLAMA_MODE
 fi
 
 case "${OLLAMA_MODE:-1}" in
@@ -160,7 +171,7 @@ case "${OLLAMA_MODE:-1}" in
             echo -e "  ${CYAN}6)${NC} Otro (nombre manual)"
             echo
             prompt "Elige modelo [1]:"
-            read -r OLLAMA_MODEL_CHOICE
+            tty_read -r OLLAMA_MODEL_CHOICE
         fi
         case "${OLLAMA_MODEL_CHOICE:-1}" in
             1) OLLAMA_MODEL="llama3" ;;
@@ -170,7 +181,7 @@ case "${OLLAMA_MODE:-1}" in
             5) OLLAMA_MODEL="qwen2:7b" ;;
             6)
                 prompt "Nombre del modelo (ej: phi3, codellama):"
-                read -r OLLAMA_MODEL
+                tty_read -r OLLAMA_MODEL
                 [[ -z "$OLLAMA_MODEL" ]] && OLLAMA_MODEL="llama3"
                 ;;
             *) OLLAMA_MODEL="llama3" ;;
@@ -179,9 +190,9 @@ case "${OLLAMA_MODE:-1}" in
         info "Ollama local — modelo: $OLLAMA_MODEL"
         ;;
     2)
-        [[ -z "${OLLAMA_HOST_CUSTOM:-}" ]] && { prompt "URL del servidor Ollama [http://localhost:11434]:"; read -r OLLAMA_HOST_CUSTOM; }
+        [[ -z "${OLLAMA_HOST_CUSTOM:-}" ]] && { prompt "URL del servidor Ollama [http://localhost:11434]:"; tty_read -r OLLAMA_HOST_CUSTOM; }
         OLLAMA_HOST="${OLLAMA_HOST_CUSTOM:-http://localhost:11434}"
-        [[ -z "${OLLAMA_MODEL_CUSTOM:-}" ]] && { prompt "Modelo a usar [llama3]:"; read -r OLLAMA_MODEL_CUSTOM; }
+        [[ -z "${OLLAMA_MODEL_CUSTOM:-}" ]] && { prompt "Modelo a usar [llama3]:"; tty_read -r OLLAMA_MODEL_CUSTOM; }
         OLLAMA_MODEL="${OLLAMA_MODEL_CUSTOM:-llama3}"
         info "Ollama externo — host: $OLLAMA_HOST — modelo: $OLLAMA_MODEL"
         ;;
@@ -200,7 +211,7 @@ info "Ollama local              : $INSTALL_OLLAMA_LOCAL"
 [[ "$INSTALL_OLLAMA_LOCAL" == "true" ]] && info "Modelo IA                 : $OLLAMA_MODEL"
 echo
 prompt "¿Continuar con la instalación? [S/n]:"
-read -r CONFIRM
+tty_read -r CONFIRM
 [[ "${CONFIRM,,}" == "n" ]] && { echo "Instalación cancelada."; exit 0; }
 
 # ── Instalar paquetes base (incluye git para el clone) ────────────────────────
