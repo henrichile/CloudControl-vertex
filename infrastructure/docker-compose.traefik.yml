@@ -9,12 +9,25 @@
 #   docker compose -f infrastructure/docker-compose.traefik.yml up -d
 
 services:
+
+  # Proxy nginx que reescribe la versión del Docker API en el path URL.
+  # Traefik envía /v1.24/... pero AlmaLinux 10 requiere API >= 1.40.
+  docker-proxy:
+    image: nginx:1.27-alpine
+    container_name: traefik-docker-proxy
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./nginx-docker-proxy.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - traefik-internal
+
   traefik:
     image: traefik:v3.3
     container_name: traefik
     restart: unless-stopped
-    environment:
-      - DOCKER_API_VERSION=1.45
+    depends_on:
+      - docker-proxy
     command:
       # ── API / Dashboard ───────────────────────────────────────────────────────
       - "--api.dashboard=true"
@@ -34,12 +47,11 @@ services:
       # HTTP/3 (QUIC) en el puerto 443 UDP
       - "--entrypoints.websecure.http3=true"
 
-      # ── Provider Docker ───────────────────────────────────────────────────────
+      # ── Provider Docker (vía proxy nginx para compatibilidad API) ─────────────
       - "--providers.docker=true"
+      - "--providers.docker.endpoint=tcp://docker-proxy:2375"
       - "--providers.docker.network=traefik-public"
-      # No exponer contenedores por defecto; solo los que tengan traefik.enable=true
       - "--providers.docker.exposedbydefault=false"
-      # Leer labels de contenedores detenidos también (útil en despliegues rolling)
       - "--providers.docker.watch=true"
 
       # ── TLS / Let's Encrypt ───────────────────────────────────────────────────
@@ -59,11 +71,11 @@ services:
       - "443:443/udp"   # HTTP/3
 
     volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "./acme.json:/acme/acme.json"
 
     networks:
       - traefik-public
+      - traefik-internal
 
     labels:
       - "traefik.enable=true"
@@ -92,3 +104,5 @@ services:
 networks:
   traefik-public:
     external: true
+  traefik-internal:
+    driver: bridge
