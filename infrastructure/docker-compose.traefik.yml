@@ -1,0 +1,92 @@
+# Traefik v3 — Reverse proxy global para Cloud Control
+# Ejecutar una sola vez en el host antes de crear proyectos con dominio.
+#
+# Requisitos previos:
+#   docker network create traefik-public
+#   touch acme.json && chmod 600 acme.json
+#
+# Inicio:
+#   docker compose -f infrastructure/docker-compose.traefik.yml up -d
+
+services:
+  traefik:
+    image: traefik:v3.3
+    container_name: traefik
+    restart: unless-stopped
+    command:
+      # ── API / Dashboard ───────────────────────────────────────────────────────
+      - "--api.dashboard=true"
+      - "--api.insecure=false"
+
+      # ── Logging ───────────────────────────────────────────────────────────────
+      - "--log.level=INFO"
+      - "--accesslog=true"
+
+      # ── Entrypoints ───────────────────────────────────────────────────────────
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Redirigir todo HTTP → HTTPS globalmente
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
+      # HTTP/3 (QUIC) en el puerto 443 UDP
+      - "--entrypoints.websecure.http3=true"
+
+      # ── Provider Docker ───────────────────────────────────────────────────────
+      - "--providers.docker=true"
+      - "--providers.docker.network=traefik-public"
+      # No exponer contenedores por defecto; solo los que tengan traefik.enable=true
+      - "--providers.docker.exposedbydefault=false"
+      # Leer labels de contenedores detenidos también (útil en despliegues rolling)
+      - "--providers.docker.watch=true"
+
+      # ── TLS / Let's Encrypt ───────────────────────────────────────────────────
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/acme/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      # Descomentar para staging (evitar rate-limit durante pruebas):
+      # - "--certificatesresolvers.letsencrypt.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
+
+      # ── Métricas Prometheus (opcional) ────────────────────────────────────────
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.buckets=0.1,0.3,1.2,5.0"
+
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./acme.json:/acme/acme.json"
+
+    networks:
+      - traefik-public
+
+    labels:
+      - "traefik.enable=true"
+      # ── Dashboard (protegido con autenticación básica) ────────────────────────
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`${TRAEFIK_DOMAIN:-traefik.localhost}`)"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - "traefik.http.routers.traefik-dashboard.middlewares=traefik-auth"
+      # Generar hash: echo $(htpasswd -nB admin) | sed -e 's/\$/\$\$/g'
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH}"
+
+      # ── Middleware global: cabeceras de seguridad ─────────────────────────────
+      - "traefik.http.middlewares.secure-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.secure-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.secure-headers.headers.stsPreload=true"
+      - "traefik.http.middlewares.secure-headers.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.secure-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.secure-headers.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.secure-headers.headers.referrerPolicy=strict-origin-when-cross-origin"
+
+      # ── Middleware global: rate-limit ─────────────────────────────────────────
+      - "traefik.http.middlewares.rate-limit.ratelimit.average=100"
+      - "traefik.http.middlewares.rate-limit.ratelimit.burst=50"
+
+networks:
+  traefik-public:
+    external: true
