@@ -504,16 +504,39 @@ docker compose \
     -f "$INSTALL_DIR/docker-compose.override.yml" \
     up -d --build
 
-step "Esperando que el backend esté saludable"
-MAX_WAIT=120; ELAPSED=0
+step "Esperando que el backend esté saludable (hasta 3 min)"
+MAX_WAIT=180; ELAPSED=0; BACKEND_OK=false
 until docker compose \
         --env-file "$INSTALL_DIR/.env" \
         -f "$INSTALL_DIR/docker-compose.yml" \
-        ps backend 2>/dev/null | grep -q "healthy"; do
-    [[ $ELAPSED -ge $MAX_WAIT ]] && { warn "Backend tardó más de ${MAX_WAIT}s — puede aún estar iniciando"; break; }
+        ps backend 2>/dev/null | grep -q "(healthy)"; do
+
+    # Detectar si el contenedor ya salió/crasheó (no vale la pena seguir esperando)
+    STATUS=$(docker inspect --format '{{.State.Status}}' cloudcontrol-backend-1 2>/dev/null || echo "missing")
+    if [[ "$STATUS" == "exited" || "$STATUS" == "dead" ]]; then
+        echo
+        error_no_exit() { echo -e "${RED}  ✖${NC}  $*" >&2; }
+        error_no_exit "El backend salió inesperadamente. Logs:"
+        echo -e "${YELLOW}──────────────────────────────────────────────${NC}"
+        docker logs --tail 50 cloudcontrol-backend-1 2>&1 || true
+        echo -e "${YELLOW}──────────────────────────────────────────────${NC}"
+        error "Instalación fallida. Corrige el error anterior y ejecuta: CC_FORCE=true ... install.sh"
+    fi
+
+    if [[ $ELAPSED -ge $MAX_WAIT ]]; then
+        echo
+        warn "Backend tardó más de ${MAX_WAIT}s. Logs actuales:"
+        echo -e "${YELLOW}──────────────────────────────────────────────${NC}"
+        docker logs --tail 30 cloudcontrol-backend-1 2>&1 || true
+        echo -e "${YELLOW}──────────────────────────────────────────────${NC}"
+        warn "Continuando de todas formas — puede que aún esté iniciando"
+        break
+    fi
+
     printf "."; sleep 5; ELAPSED=$((ELAPSED+5))
 done
 echo
+[[ $ELAPSED -lt $MAX_WAIT ]] && BACKEND_OK=true
 
 # ── Verificación final ────────────────────────────────────────────────────────
 step "Verificación de servicios"

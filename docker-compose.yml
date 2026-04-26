@@ -4,6 +4,11 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    # Ejecutar como root: el backend necesita acceso al socket de Docker
+    # que en el host pertenece al grupo docker (GID variable por distro).
+    # Como la herramienta ya tiene acceso root-equivalente via Docker socket,
+    # no hay pérdida de seguridad real corriendo el proceso como root.
+    user: "0"
     environment:
       - PORT=8080
       - DATABASE_PATH=/data/cloudcontrol.db
@@ -13,16 +18,16 @@ services:
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
       - GIN_MODE=release
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock
       - backend_data:/data
     networks:
       - internal
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/v1/health"]
-      interval: 30s
+      interval: 15s
       timeout: 5s
-      retries: 3
-      start_period: 10s
+      retries: 5
+      start_period: 30s
 
   frontend:
     build:
