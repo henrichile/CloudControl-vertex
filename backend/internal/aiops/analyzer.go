@@ -19,7 +19,7 @@ type MetricsSnapshot struct {
 
 // ScalingRecommendation is the structured output of a metrics analysis.
 type ScalingRecommendation struct {
-	Action      string  `json:"action"`      // "scale_up", "scale_down", "ok"
+	Action      string  `json:"action"` // "scale_up", "scale_down", "ok"
 	Reason      string  `json:"reason"`
 	NewCPULimit float64 `json:"new_cpu_limit,omitempty"` // percent (0-100)
 	NewMemLimMB float64 `json:"new_mem_limit_mb,omitempty"`
@@ -57,26 +57,26 @@ func (a *Analyzer) AnalyzeMetrics(ctx context.Context, snap MetricsSnapshot) (*S
 		memPercent = (snap.MemUsageMB / snap.MemLimitMB) * 100
 	}
 
-	prompt := fmt.Sprintf(`You are an expert DevOps engineer analyzing Docker container resource usage.
-Analyze the following metrics and provide a scaling recommendation.
+	prompt := fmt.Sprintf(`Eres un ingeniero DevOps experto analizando el uso de recursos de contenedores Docker.
+Analiza las siguientes métricas y proporciona una recomendación de escalamiento.
 
-Container: %s
-CPU Usage: %.2f%%
-Memory Usage: %.2f MB / %.2f MB (%.1f%%)
-Network In: %.2f MB
-Network Out: %.2f MB
+Contenedor: %s
+Uso de CPU: %.2f%%
+Uso de Memoria: %.2f MB / %.2f MB (%.1f%%)
+Red Entrada: %.2f MB
+Red Salida: %.2f MB
 
-Based on these metrics:
-1. Determine if the container needs resources scaled UP, DOWN, or is OK as-is.
-2. If scaling is needed, provide specific new limits.
-3. Explain the reasoning briefly.
+Basándote en estas métricas:
+1. Determina si el contenedor necesita escalar HACIA ARRIBA, HACIA ABAJO, u OK como está.
+2. Si se necesita escalar, proporciona límites nuevos específicos.
+3. Explica el razonamiento brevemente.
 
-Respond in this exact JSON format (no markdown, no extra text):
+Responde en este formato JSON exacto (sin markdown, sin texto extra):
 {
   "action": "scale_up|scale_down|ok",
-  "reason": "brief explanation",
-  "new_cpu_limit": <number or null>,
-  "new_mem_limit_mb": <number or null>
+  "reason": "explicación breve",
+  "new_cpu_limit": <número o null>,
+  "new_mem_limit_mb": <número o null>
 }`,
 		snap.ContainerName, snap.CPUPercent,
 		snap.MemUsageMB, snap.MemLimitMB, memPercent,
@@ -95,32 +95,32 @@ Respond in this exact JSON format (no markdown, no extra text):
 
 // AuditConfig sends a config file to Ollama for security analysis.
 func (a *Analyzer) AuditConfig(ctx context.Context, fileName, content string) (*SecurityAuditResult, error) {
-	prompt := fmt.Sprintf(`You are a security expert auditing Docker and infrastructure configuration files.
-Analyze the following file for security vulnerabilities, misconfigurations, and best-practice violations.
+	prompt := fmt.Sprintf(`Eres un experto en seguridad auditando archivos de configuración de Docker e infraestructura.
+Analiza el siguiente archivo en busca de vulnerabilidades de seguridad, configuraciones erróneas y violaciones de mejores prácticas.
 
-File: %s
-Content:
+Archivo: %s
+Contenido:
 ---
 %s
 ---
 
-Check for:
-- Exposed secrets or credentials in environment variables
-- Dangerous port exposures (e.g., database ports exposed to 0.0.0.0)
-- Images without pinned versions (using :latest tag)
-- Running as root user
-- Missing resource limits
-- Insecure network configurations
-- Missing security options (no-new-privileges, read-only filesystem)
-- Outdated or vulnerable base images
+Verifica:
+- Secretos o credenciales expuestos en variables de entorno
+- Exposiciones de puerto peligrosas (ej: puertos de bases de datos expuestos a 0.0.0.0)
+- Imágenes sin versiones fijadas (usando etiqueta :latest)
+- Ejecución como usuario root
+- Límites de recursos faltantes
+- Configuraciones de red inseguras
+- Opciones de seguridad faltantes (no-new-privileges, filesystem read-only)
+- Imágenes base desactualizadas o vulnerables
 
-For each finding, provide:
+Para cada hallazgo, proporciona:
 - severity: critical|high|medium|low|info
-- finding: what the issue is
-- suggestion: how to fix it
-- line_number: approximate line in the file (or 0 if not applicable)
+- finding: cuál es el problema
+- suggestion: cómo solucionarlo
+- line_number: línea aproximada en el archivo (o 0 si no aplica)
 
-Respond in this exact JSON format (no markdown):
+Responde en este formato JSON exacto (sin markdown):
 {
   "score": <0-100>,
   "findings": [
@@ -146,21 +146,21 @@ func (a *Analyzer) AnalyzeLogs(ctx context.Context, containerName, logs string) 
 		logs = logs[len(logs)-8000:] // keep the most recent portion
 	}
 
-	prompt := fmt.Sprintf(`You are a DevOps expert analyzing Docker container logs for errors, warnings, and anomalies.
+	prompt := fmt.Sprintf(`Eres un experto DevOps analizando logs de contenedores Docker en busca de errores, advertencias y anomalías.
 
-Container: %s
-Recent Logs:
+Contenedor: %s
+Logs Recientes:
 ---
 %s
 ---
 
-Identify:
-1. Critical errors or crashes
-2. Performance warnings
-3. Security-relevant events (failed auth, unexpected access)
-4. Recurring patterns that indicate instability
+Identifica:
+1. Errores críticos o bloqueos
+2. Advertencias de rendimiento
+3. Eventos relevantes para seguridad (fallos de autenticación, acceso inesperado)
+4. Patrones recurrentes que indican inestabilidad
 
-Provide a concise summary (max 200 words) with actionable recommendations.`,
+Proporciona un resumen conciso (máx 200 palabras) con recomendaciones accionables.`,
 		containerName, logs,
 	)
 
@@ -232,8 +232,8 @@ func parseSecurityAudit(raw string) *SecurityAuditResult {
 
 	if len(result.Findings) == 0 {
 		result.Findings = []SecurityFinding{{
-			Severity: "info",
-			Finding:  "No specific findings extracted",
+			Severity:   "info",
+			Finding:    "No specific findings extracted",
 			Suggestion: raw,
 		}}
 	}
