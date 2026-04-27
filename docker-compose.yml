@@ -13,6 +13,7 @@ services:
       - PORT=8080
       - DATABASE_PATH=/data/cloudcontrol.db
       - DOCKER_HOST=unix:///var/run/docker.sock
+      - PROJECTS_DIR=/opt/cloudcontrol/projects
       - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
@@ -20,7 +21,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - backend_data:/data
-      - backend_projects:/app/projects
+      - /opt/cloudcontrol/projects:/opt/cloudcontrol/projects
     networks:
       - internal
     healthcheck:
@@ -47,4 +48,3 @@ networks:
 
 volumes:
   backend_data:
-  backend_projects:

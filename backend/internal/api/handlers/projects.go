@@ -90,7 +90,11 @@ func (h *ProjectHandler) Create(c *gin.Context) {
 	}
 	compose := files["docker-compose.yml"]
 
-	workDir := filepath.Join("projects", req.Name)
+	projectsDir := os.Getenv("PROJECTS_DIR")
+	if projectsDir == "" {
+		projectsDir = "/opt/cloudcontrol/projects"
+	}
+	workDir := filepath.Join(projectsDir, req.Name)
 	for relPath, content := range files {
 		fullPath := filepath.Join(workDir, relPath)
 		if err := os.MkdirAll(filepath.Dir(fullPath), 0750); err != nil {
