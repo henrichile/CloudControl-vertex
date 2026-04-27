@@ -14,7 +14,7 @@ services:
       - DATABASE_PATH=/data/cloudcontrol.db
       - DOCKER_HOST=unix:///var/run/docker.sock
       - PROJECTS_DIR=/opt/cloudcontrol/projects
-      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://172.17.0.1:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
       - GIN_MODE=release
