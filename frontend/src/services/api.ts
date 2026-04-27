@@ -50,8 +50,40 @@ export const projectsApi = {
     db_user?: string
     db_password?: string
     app_port?: string
+    domain?: string
   }) => api.post('/projects', data).then((r) => r.data),
   up: (id: string) => api.post(`/projects/${id}/up`).then((r) => r.data),
+  upStream: (id: string, onEvent: (type: string, msg: string) => void): AbortController => {
+    const controller = new AbortController()
+    const token = localStorage.getItem('cc_token')
+    fetch(`/api/v1/projects/${id}/up/stream`, {
+      headers: { Authorization: `Bearer ${token ?? ''}` },
+      signal: controller.signal,
+    }).then(async (res) => {
+      if (!res.ok || !res.body) { onEvent('error', `HTTP ${res.status}`); return }
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        const lines = buf.split('\n')
+        buf = lines.pop() ?? ''
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const ev = JSON.parse(line.slice(6))
+              onEvent(ev.type, ev.msg)
+            } catch { /* ignore malformed */ }
+          }
+        }
+      }
+    }).catch((err) => {
+      if (err.name !== 'AbortError') onEvent('error', err.message)
+    })
+    return controller
+  },
   down: (id: string) => api.post(`/projects/${id}/down`).then((r) => r.data),
   delete: (id: string) => api.delete(`/projects/${id}`).then((r) => r.data),
   listStacks: () => api.get('/stacks').then((r) => r.data),

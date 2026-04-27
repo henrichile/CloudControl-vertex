@@ -67,6 +67,7 @@ func (r *Router) Register(engine *gin.Engine) {
 		v1.GET("/projects/:id", r.projects.Get)
 		v1.POST("/projects", r.projects.Create)
 		v1.POST("/projects/:id/up", r.projects.Up)
+		v1.GET("/projects/:id/up/stream", r.projects.UpStream)
 		v1.POST("/projects/:id/down", r.projects.Down)
 		v1.DELETE("/projects/:id", r.projects.Delete)
 

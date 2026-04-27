@@ -1,8 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { projectsApi } from '@/services/api'
 import { Project } from '@/types'
-import { useState } from 'react'
-import { Plus, Play, Square, Trash2, ChevronRight, Loader2 } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Plus, Play, Square, Trash2, ChevronRight, Loader2, Terminal, X } from 'lucide-react'
 import clsx from 'clsx'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -12,10 +12,19 @@ const STATUS_COLORS: Record<string, string> = {
   draft:   'bg-blue-900/50 text-blue-300 border-blue-800',
 }
 
+type LogEntry = { type: string; msg: string }
+
 export default function Projects() {
   const qc = useQueryClient()
   const [showCreate, setShowCreate] = useState(false)
-  const [form, setForm] = useState({ name: '', stack: '', db_name: '', db_user: '', db_password: 'secret', app_port: '8080' })
+  const [form, setForm] = useState({
+    name: '', stack: '', db_name: '', db_user: '', db_password: 'secret', app_port: '8080', domain: '',
+  })
+  const [logPanel, setLogPanel] = useState<{ projectId: string; projectName: string } | null>(null)
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [streaming, setStreaming] = useState(false)
+  const abortRef = useRef<AbortController | null>(null)
+  const logsEndRef = useRef<HTMLDivElement | null>(null)
 
   const { data: projectsData, isLoading } = useQuery({
     queryKey: ['projects'],
@@ -35,11 +44,6 @@ export default function Projects() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['projects'] }); setShowCreate(false) },
   })
 
-  const upMutation = useMutation({
-    mutationFn: projectsApi.up,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
-  })
-
   const downMutation = useMutation({
     mutationFn: projectsApi.down,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
@@ -49,6 +53,30 @@ export default function Projects() {
     mutationFn: projectsApi.delete,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
   })
+
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [logs])
+
+  function startStream(projectId: string, projectName: string) {
+    setLogs([])
+    setStreaming(true)
+    setLogPanel({ projectId, projectName })
+    const ctrl = projectsApi.upStream(projectId, (type, msg) => {
+      setLogs((prev) => [...prev, { type, msg }])
+      if (type === 'done' || type === 'error') {
+        setStreaming(false)
+        qc.invalidateQueries({ queryKey: ['projects'] })
+      }
+    })
+    abortRef.current = ctrl
+  }
+
+  function closeLogPanel() {
+    abortRef.current?.abort()
+    setLogPanel(null)
+    setStreaming(false)
+  }
 
   return (
     <div className="p-8 flex flex-col gap-6">
@@ -90,8 +118,10 @@ export default function Projects() {
               </div>
               <div className="flex items-center gap-2">
                 {p.status !== 'running' ? (
-                  <button onClick={() => upMutation.mutate(p.id)} disabled={upMutation.isPending}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-800/50 hover:bg-emerald-700/50 text-emerald-300 rounded-lg text-xs transition-colors">
+                  <button
+                    onClick={() => startStream(p.id, p.name)}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-800/50 hover:bg-emerald-700/50 text-emerald-300 rounded-lg text-xs transition-colors"
+                  >
                     <Play size={13} />Up
                   </button>
                 ) : (
@@ -128,18 +158,59 @@ export default function Projects() {
               </div>
               <Input label="Base de datos" value={form.db_name} onChange={(v) => setForm({ ...form, db_name: v })} placeholder="appdb" />
               <Input label="Puerto" value={form.app_port} onChange={(v) => setForm({ ...form, app_port: v })} placeholder="8080" />
+              <Input label="Dominio (opcional)" value={form.domain} onChange={(v) => setForm({ ...form, domain: v })} placeholder="app.midominio.com" />
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowCreate(false)} className="flex-1 px-4 py-2 bg-surface-700 hover:bg-surface-600 text-slate-300 rounded-lg text-sm">
                 Cancelar
               </button>
               <button
-                onClick={() => createMutation.mutate({ name: form.name, stack: form.stack, db_name: form.db_name, db_user: form.db_user, db_password: form.db_password, app_port: form.app_port })}
+                onClick={() => createMutation.mutate({
+                  name: form.name, stack: form.stack, db_name: form.db_name,
+                  db_user: form.db_user, db_password: form.db_password,
+                  app_port: form.app_port, domain: form.domain || undefined,
+                })}
                 disabled={!form.name || !form.stack || createMutation.isPending}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium"
               >
                 {createMutation.isPending ? <><Loader2 size={14} className="animate-spin" />Creando...</> : 'Crear'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Log Panel */}
+      {logPanel && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-950 rounded-xl border border-surface-700 w-full max-w-3xl flex flex-col" style={{ height: '70vh' }}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-surface-700 shrink-0">
+              <div className="flex items-center gap-2 text-sm text-slate-300">
+                <Terminal size={15} className="text-emerald-400" />
+                <span className="font-mono font-semibold">{logPanel.projectName}</span>
+                {streaming
+                  ? <Loader2 size={13} className="animate-spin text-emerald-400 ml-1" />
+                  : <span className="text-xs text-slate-500 ml-1">(terminado)</span>
+                }
+              </div>
+              <button onClick={closeLogPanel} className="p-1 text-slate-500 hover:text-slate-300 rounded transition-colors">
+                <X size={15} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed">
+              {logs.map((l, i) => (
+                <div
+                  key={i}
+                  className={clsx('whitespace-pre-wrap break-all',
+                    l.type === 'error' ? 'text-red-400' :
+                    l.type === 'done'  ? 'text-emerald-400 font-semibold' :
+                    'text-slate-300'
+                  )}
+                >
+                  {l.type === 'error' && '✗ '}{l.type === 'done' && '✓ '}{l.msg}
+                </div>
+              ))}
+              <div ref={logsEndRef} />
             </div>
           </div>
         </div>

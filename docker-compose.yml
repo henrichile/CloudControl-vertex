@@ -20,6 +20,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - backend_data:/data
+      - backend_projects:/app/projects
     networks:
       - internal
     healthcheck:
@@ -46,3 +47,4 @@ networks:
 
 volumes:
   backend_data:
+  backend_projects:

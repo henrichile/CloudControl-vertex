@@ -19,7 +19,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build \
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates tzdata && \
+RUN apk add --no-cache ca-certificates tzdata docker-cli docker-cli-compose && \
     addgroup -S appgroup && \
     adduser -S appuser -G appgroup
 

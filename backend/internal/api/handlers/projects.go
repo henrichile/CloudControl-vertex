@@ -1,10 +1,16 @@
 package handlers
 
 import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"sync"
 
 	"github.com/etasoft/cloudcontrol/internal/container"
 	"github.com/etasoft/cloudcontrol/internal/database/models"
@@ -135,6 +141,90 @@ func (h *ProjectHandler) Up(c *gin.Context) {
 
 	h.db.Model(&project).Update("status", models.ProjectStatusRunning)
 	c.JSON(http.StatusOK, gin.H{"status": "running", "output": string(out)})
+}
+
+// UpStream godoc — GET /api/v1/projects/:id/up/stream (Server-Sent Events)
+// Ejecuta docker compose up --build y emite cada línea de output como evento SSE.
+func (h *ProjectHandler) UpStream(c *gin.Context) {
+	project, ok := h.fetchProject(c)
+	if !ok {
+		return
+	}
+
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no") // deshabilitar buffer de nginx/traefik
+	c.Writer.WriteHeader(http.StatusOK)
+
+	flusher, canFlush := c.Writer.(http.Flusher)
+
+	sendEvent := func(typ, msg string) {
+		b, _ := json.Marshal(map[string]string{"type": typ, "msg": msg})
+		fmt.Fprintf(c.Writer, "data: %s\n\n", b)
+		if canFlush {
+			flusher.Flush()
+		}
+	}
+
+	sendEvent("log", "▶  docker compose up --build")
+
+	cmd := exec.CommandContext(c.Request.Context(),
+		"docker", "compose",
+		"-f", filepath.Join(project.WorkDir, "docker-compose.yml"),
+		"up", "-d", "--build",
+	)
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		sendEvent("error", "stdout pipe: "+err.Error())
+		return
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		sendEvent("error", "stderr pipe: "+err.Error())
+		return
+	}
+
+	if err := cmd.Start(); err != nil {
+		sendEvent("error", err.Error())
+		return
+	}
+
+	// Leer stdout y stderr en goroutines separadas; enviar líneas a canal para
+	// escribir en el response desde el goroutine principal (evita race en Writer).
+	logCh := make(chan string, 256)
+	var wg sync.WaitGroup
+
+	scanPipe := func(r io.Reader) {
+		defer wg.Done()
+		scanner := bufio.NewScanner(r)
+		scanner.Buffer(make([]byte, 1024*64), 1024*64)
+		for scanner.Scan() {
+			line := strings.TrimRight(scanner.Text(), "\r")
+			if line != "" {
+				logCh <- line
+			}
+		}
+	}
+
+	wg.Add(2)
+	go scanPipe(stdout)
+	go scanPipe(stderr)
+	go func() { wg.Wait(); close(logCh) }()
+
+	for line := range logCh {
+		sendEvent("log", line)
+	}
+
+	if err := cmd.Wait(); err != nil {
+		h.db.Model(&project).Update("status", models.ProjectStatusError)
+		sendEvent("error", err.Error())
+		return
+	}
+
+	h.db.Model(&project).Update("status", models.ProjectStatusRunning)
+	sendEvent("done", "running")
 }
 
 // Down godoc — POST /api/v1/projects/:id/down
