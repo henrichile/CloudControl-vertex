@@ -710,6 +710,16 @@ func injectTraefikLabels(def StackDefinition, p ProjectParams) StackDefinition {
 		if svc.Name == def.MainService {
 			result.Services[i].Labels = append(svc.Labels, labels...)
 			result.Services[i].Networks = append(svc.Networks, networks...)
+
+			// Remove hardcoded HTTPS ports (443) when using Traefik, as Traefik
+			// manages port 443 globally. Keep only the HTTP port mapping.
+			filteredPorts := []string{}
+			for _, port := range svc.Ports {
+				if !strings.Contains(port, "443") {
+					filteredPorts = append(filteredPorts, port)
+				}
+			}
+			result.Services[i].Ports = filteredPorts
 		}
 	}
 	return result
