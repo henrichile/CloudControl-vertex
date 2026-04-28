@@ -383,12 +383,23 @@ short_open_tag         = Off
 `,
 				"docker/frankenphp/init.sh": `#!/bin/sh
 set -e
-until nc -z mysql 3306 2>/dev/null; do sleep 1; done
+
+# Esperar a MySQL con ping usando PHP
+while ! php -r "mysqli_connect('mysql', 'root', getenv('WORDPRESS_DB_PASSWORD'));" 2>/dev/null; do
+  sleep 1
+done
+
+# Descargar WordPress si no existe
 if [ ! -f /app/public/wp-load.php ]; then
-  cd /tmp && wget -q https://wordpress.org/latest.tar.gz && tar xzf latest.tar.gz
-  cp -r wordpress/* /app/public/ && rm -rf wordpress latest.tar.gz
+  cd /tmp
+  php -r "file_put_contents('latest.tar.gz', file_get_contents('https://wordpress.org/latest.tar.gz'));"
+  tar xzf latest.tar.gz
+  cp -r wordpress/* /app/public/
+  rm -rf wordpress latest.tar.gz
   chown -R www-data:www-data /app/public
 fi
+
+# Crear wp-config.php
 if [ ! -f /app/public/wp-config.php ]; then
   cat > /app/public/wp-config.php <<'WPCONFIG'
 <?php
@@ -396,18 +407,24 @@ define('DB_NAME', getenv('WORDPRESS_DB_NAME'));
 define('DB_USER', getenv('WORDPRESS_DB_USER'));
 define('DB_PASSWORD', getenv('WORDPRESS_DB_PASSWORD'));
 define('DB_HOST', getenv('WORDPRESS_DB_HOST'));
-define('DB_CHARSET', getenv('WORDPRESS_DB_CHARSET'));
+define('DB_CHARSET', getenv('WORDPRESS_DB_CHARSET') ?: 'utf8mb4');
+define('DB_COLLATE', '');
 $table_prefix = 'wp_';
-define('AUTH_KEY','a'); define('SECURE_AUTH_KEY','b');
-define('LOGGED_IN_KEY','c'); define('NONCE_KEY','d');
-define('AUTH_SALT','e'); define('SECURE_AUTH_SALT','f');
-define('LOGGED_IN_SALT','g'); define('NONCE_SALT','h');
+define('AUTH_KEY', 'put-your-unique-phrase-here');
+define('SECURE_AUTH_KEY', 'put-your-unique-phrase-here');
+define('LOGGED_IN_KEY', 'put-your-unique-phrase-here');
+define('NONCE_KEY', 'put-your-unique-phrase-here');
+define('AUTH_SALT', 'put-your-unique-phrase-here');
+define('SECURE_AUTH_SALT', 'put-your-unique-phrase-here');
+define('LOGGED_IN_SALT', 'put-your-unique-phrase-here');
+define('NONCE_SALT', 'put-your-unique-phrase-here');
 define('WP_DEBUG', false);
 define('ABSPATH', __DIR__ . '/');
 require_once(ABSPATH . 'wp-settings.php');
 WPCONFIG
   chown www-data:www-data /app/public/wp-config.php
 fi
+
 exec /usr/local/bin/docker-php-entrypoint
 `,
 		},
