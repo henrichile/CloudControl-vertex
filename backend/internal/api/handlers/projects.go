@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -85,7 +86,7 @@ func (h *ProjectHandler) Create(c *gin.Context) {
 
 	files, err := h.engine.GenerateFiles(params)
 	if err != nil {
-		fmt.Printf("ERROR GenerateFiles: %v\n", err)
+		log.Printf("[ERROR] GenerateFiles: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("GenerateFiles: %v", err)})
 		return
 	}
@@ -98,14 +99,14 @@ func (h *ProjectHandler) Create(c *gin.Context) {
 	workDir := filepath.Join(projectsDir, req.Name)
 	for relPath, content := range files {
 		fullPath := filepath.Join(workDir, relPath)
-		fmt.Printf("Writing file: %s\n", fullPath)
+		log.Printf("[DEBUG] Writing file: %s", fullPath)
 		if err := os.MkdirAll(filepath.Dir(fullPath), 0750); err != nil {
-			fmt.Printf("ERROR MkdirAll: %v\n", err)
+			log.Printf("[ERROR] MkdirAll: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("MkdirAll %s: %v", relPath, err)})
 			return
 		}
 		if err := os.WriteFile(fullPath, []byte(content), 0640); err != nil {
-			fmt.Printf("ERROR WriteFile: %v\n", err)
+			log.Printf("[ERROR] WriteFile: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("WriteFile %s: %v", relPath, err)})
 			return
 		}
