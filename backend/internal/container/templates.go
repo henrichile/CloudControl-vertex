@@ -382,20 +382,7 @@ default_charset        = UTF-8
 short_open_tag         = Off
 `,
 				"docker/frankenphp/init.sh": `#!/bin/sh
-set -e
-
-# Descargar WordPress si no existe (sin esperar MySQL, FrankenPHP esperará)
-if [ ! -f /app/public/wp-load.php ]; then
-  cd /tmp
-  php -r "file_put_contents('latest.tar.gz', file_get_contents('https://wordpress.org/latest.tar.gz'));" 2>/dev/null || {
-    # Fallback: usar curl si PHP falla
-    curl -sS -o latest.tar.gz https://wordpress.org/latest.tar.gz || exit 1
-  }
-  tar xzf latest.tar.gz
-  cp -r wordpress/* /app/public/ 2>/dev/null || true
-  rm -rf wordpress latest.tar.gz
-  chown -R www-data:www-data /app/public 2>/dev/null || true
-fi
+# WordPress initialization - FrankenPHP entrypoint wrapper
 
 # Crear wp-config.php si no existe
 if [ ! -f /app/public/wp-config.php ]; then
@@ -420,7 +407,6 @@ define('WP_DEBUG', false);
 define('ABSPATH', __DIR__ . '/');
 require_once(ABSPATH . 'wp-settings.php');
 WPCONFIG
-  chown www-data:www-data /app/public/wp-config.php 2>/dev/null || true
 fi
 
 # Iniciar FrankenPHP
