@@ -26,8 +26,6 @@ services:
     image: traefik:v3.3
     container_name: traefik
     restart: unless-stopped
-    depends_on:
-      - docker-proxy
     command:
       # ── API / Dashboard ───────────────────────────────────────────────────────
       - "--api.dashboard=true"
@@ -47,9 +45,9 @@ services:
       # HTTP/3 (QUIC) en el puerto 443 UDP
       - "--entrypoints.websecure.http3=true"
 
-      # ── Provider Docker (vía proxy nginx para compatibilidad API) ─────────────
+      # ── Provider Docker (conexión directa al socket) ───────────────────────────
       - "--providers.docker=true"
-      - "--providers.docker.endpoint=tcp://docker-proxy:2375"
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
       - "--providers.docker.network=traefik-public"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.watch=true"
@@ -71,6 +69,7 @@ services:
       - "443:443/udp"   # HTTP/3
 
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - "./acme.json:/acme/acme.json"
 
     networks:
