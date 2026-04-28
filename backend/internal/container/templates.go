@@ -384,47 +384,46 @@ short_open_tag         = Off
 				"docker/frankenphp/init.sh": `#!/bin/sh
 set -e
 
-# Esperar a MySQL con ping usando PHP
-while ! php -r "mysqli_connect('mysql', 'root', getenv('WORDPRESS_DB_PASSWORD'));" 2>/dev/null; do
-  sleep 1
-done
-
-# Descargar WordPress si no existe
+# Descargar WordPress si no existe (sin esperar MySQL, FrankenPHP esperará)
 if [ ! -f /app/public/wp-load.php ]; then
   cd /tmp
-  php -r "file_put_contents('latest.tar.gz', file_get_contents('https://wordpress.org/latest.tar.gz'));"
+  php -r "file_put_contents('latest.tar.gz', file_get_contents('https://wordpress.org/latest.tar.gz'));" 2>/dev/null || {
+    # Fallback: usar curl si PHP falla
+    curl -sS -o latest.tar.gz https://wordpress.org/latest.tar.gz || exit 1
+  }
   tar xzf latest.tar.gz
-  cp -r wordpress/* /app/public/
+  cp -r wordpress/* /app/public/ 2>/dev/null || true
   rm -rf wordpress latest.tar.gz
-  chown -R www-data:www-data /app/public
+  chown -R www-data:www-data /app/public 2>/dev/null || true
 fi
 
-# Crear wp-config.php
+# Crear wp-config.php si no existe
 if [ ! -f /app/public/wp-config.php ]; then
   cat > /app/public/wp-config.php <<'WPCONFIG'
 <?php
-define('DB_NAME', getenv('WORDPRESS_DB_NAME'));
-define('DB_USER', getenv('WORDPRESS_DB_USER'));
-define('DB_PASSWORD', getenv('WORDPRESS_DB_PASSWORD'));
-define('DB_HOST', getenv('WORDPRESS_DB_HOST'));
+define('DB_NAME', getenv('WORDPRESS_DB_NAME') ?: 'wordpress');
+define('DB_USER', getenv('WORDPRESS_DB_USER') ?: 'wordpress');
+define('DB_PASSWORD', getenv('WORDPRESS_DB_PASSWORD') ?: 'password');
+define('DB_HOST', getenv('WORDPRESS_DB_HOST') ?: 'mysql');
 define('DB_CHARSET', getenv('WORDPRESS_DB_CHARSET') ?: 'utf8mb4');
 define('DB_COLLATE', '');
 $table_prefix = 'wp_';
-define('AUTH_KEY', 'put-your-unique-phrase-here');
-define('SECURE_AUTH_KEY', 'put-your-unique-phrase-here');
-define('LOGGED_IN_KEY', 'put-your-unique-phrase-here');
-define('NONCE_KEY', 'put-your-unique-phrase-here');
-define('AUTH_SALT', 'put-your-unique-phrase-here');
-define('SECURE_AUTH_SALT', 'put-your-unique-phrase-here');
-define('LOGGED_IN_SALT', 'put-your-unique-phrase-here');
-define('NONCE_SALT', 'put-your-unique-phrase-here');
+define('AUTH_KEY', 'auth-key-change-me');
+define('SECURE_AUTH_KEY', 'secure-auth-key-change-me');
+define('LOGGED_IN_KEY', 'logged-in-key-change-me');
+define('NONCE_KEY', 'nonce-key-change-me');
+define('AUTH_SALT', 'auth-salt-change-me');
+define('SECURE_AUTH_SALT', 'secure-auth-salt-change-me');
+define('LOGGED_IN_SALT', 'logged-in-salt-change-me');
+define('NONCE_SALT', 'nonce-salt-change-me');
 define('WP_DEBUG', false);
 define('ABSPATH', __DIR__ . '/');
 require_once(ABSPATH . 'wp-settings.php');
 WPCONFIG
-  chown www-data:www-data /app/public/wp-config.php
+  chown www-data:www-data /app/public/wp-config.php 2>/dev/null || true
 fi
 
+# Iniciar FrankenPHP
 exec /usr/local/bin/docker-php-entrypoint
 `,
 		},
