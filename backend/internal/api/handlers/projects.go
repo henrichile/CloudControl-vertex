@@ -85,7 +85,8 @@ func (h *ProjectHandler) Create(c *gin.Context) {
 
 	files, err := h.engine.GenerateFiles(params)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		fmt.Printf("ERROR GenerateFiles: %v\n", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("GenerateFiles: %v", err)})
 		return
 	}
 	compose := files["docker-compose.yml"]
@@ -97,12 +98,15 @@ func (h *ProjectHandler) Create(c *gin.Context) {
 	workDir := filepath.Join(projectsDir, req.Name)
 	for relPath, content := range files {
 		fullPath := filepath.Join(workDir, relPath)
+		fmt.Printf("Writing file: %s\n", fullPath)
 		if err := os.MkdirAll(filepath.Dir(fullPath), 0750); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create directory for " + relPath})
+			fmt.Printf("ERROR MkdirAll: %v\n", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("MkdirAll %s: %v", relPath, err)})
 			return
 		}
 		if err := os.WriteFile(fullPath, []byte(content), 0640); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not write " + relPath})
+			fmt.Printf("ERROR WriteFile: %v\n", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("WriteFile %s: %v", relPath, err)})
 			return
 		}
 	}
