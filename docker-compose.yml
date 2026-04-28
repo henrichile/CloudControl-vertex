@@ -24,6 +24,13 @@ services:
       - /opt/cloudcontrol/projects:/opt/cloudcontrol/projects
     networks:
       - internal
+      - traefik-public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.cloudcontrol-admin.rule=Host(`${ADMIN_DOMAIN:-vertex.cloudcontrol.cl}`)"
+      - "traefik.http.routers.cloudcontrol-admin.entrypoints=websecure"
+      - "traefik.http.routers.cloudcontrol-admin.tls.certresolver=letsencrypt"
+      - "traefik.http.services.cloudcontrol-admin.loadbalancer.server.port=8080"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/v1/health"]
       interval: 15s
@@ -55,6 +62,8 @@ services:
 networks:
   internal:
     driver: bridge
+  traefik-public:
+    external: true
 
 volumes:
   backend_data:
