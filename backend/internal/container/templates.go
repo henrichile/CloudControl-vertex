@@ -154,11 +154,13 @@ var stacks = map[string]StackDefinition{
 					"PHP_INI_SCAN_DIR=/usr/local/etc/php/conf.d",
 				},
 				DependsOn: []string{"mysql", "redis"},
+				Command: "sh /docker-init.sh",
 				Volumes: []string{
 					"wp_data:/app/public",
 					"./docker/frankenphp/Caddyfile:/etc/caddy/Caddyfile:ro",
 					"./docker/php/opcache.ini:/usr/local/etc/php/conf.d/opcache.ini:ro",
 					"./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini:ro",
+					"./docker/frankenphp/init.sh:/docker-init.sh:ro",
 				},
 				Restart: "unless-stopped",
 			},
@@ -378,6 +380,35 @@ realpath_cache_ttl     = 600
 ; ── Misc ─────────────────────────────────────────────────────────────────────
 default_charset        = UTF-8
 short_open_tag         = Off
+`,
+				"docker/frankenphp/init.sh": `#!/bin/sh
+set -e
+until nc -z mysql 3306 2>/dev/null; do sleep 1; done
+if [ ! -f /app/public/wp-load.php ]; then
+  cd /tmp && wget -q https://wordpress.org/latest.tar.gz && tar xzf latest.tar.gz
+  cp -r wordpress/* /app/public/ && rm -rf wordpress latest.tar.gz
+  chown -R www-data:www-data /app/public
+fi
+if [ ! -f /app/public/wp-config.php ]; then
+  cat > /app/public/wp-config.php <<'WPCONFIG'
+<?php
+define('DB_NAME', getenv('WORDPRESS_DB_NAME'));
+define('DB_USER', getenv('WORDPRESS_DB_USER'));
+define('DB_PASSWORD', getenv('WORDPRESS_DB_PASSWORD'));
+define('DB_HOST', getenv('WORDPRESS_DB_HOST'));
+define('DB_CHARSET', getenv('WORDPRESS_DB_CHARSET'));
+$table_prefix = 'wp_';
+define('AUTH_KEY','a'); define('SECURE_AUTH_KEY','b');
+define('LOGGED_IN_KEY','c'); define('NONCE_KEY','d');
+define('AUTH_SALT','e'); define('SECURE_AUTH_SALT','f');
+define('LOGGED_IN_SALT','g'); define('NONCE_SALT','h');
+define('WP_DEBUG', false);
+define('ABSPATH', __DIR__ . '/');
+require_once(ABSPATH . 'wp-settings.php');
+WPCONFIG
+  chown www-data:www-data /app/public/wp-config.php
+fi
+exec /usr/local/bin/docker-php-entrypoint
 `,
 		},
 	},
