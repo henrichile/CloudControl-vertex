@@ -735,17 +735,30 @@ func injectTraefikLabels(def StackDefinition, p ProjectParams) StackDefinition {
 
 	result := def
 	result.Services = make([]ServiceDef, len(def.Services))
-	copy(result.Services, def.Services)
 
-	for i, svc := range result.Services {
+	// Deep copy each service to avoid modifying original slices
+	for i, svc := range def.Services {
+		result.Services[i] = ServiceDef{
+			Name:        svc.Name,
+			Image:       svc.Image,
+			Ports:       append([]string{}, svc.Ports...),
+			Environment: append([]string{}, svc.Environment...),
+			Volumes:     append([]string{}, svc.Volumes...),
+			DependsOn:   append([]string{}, svc.DependsOn...),
+			Restart:     svc.Restart,
+			Command:     svc.Command,
+			Labels:      append([]string{}, svc.Labels...),
+			Networks:    append([]string{}, svc.Networks...),
+		}
+
 		if svc.Name == def.MainService {
-			result.Services[i].Labels = append(svc.Labels, labels...)
-			result.Services[i].Networks = append(svc.Networks, networks...)
+			result.Services[i].Labels = append(result.Services[i].Labels, labels...)
+			result.Services[i].Networks = append(result.Services[i].Networks, networks...)
 
 			// Remove hardcoded HTTPS ports (443) when using Traefik, as Traefik
 			// manages port 443 globally. Keep only the HTTP port mapping.
 			filteredPorts := []string{}
-			for _, port := range svc.Ports {
+			for _, port := range result.Services[i].Ports {
 				if !strings.Contains(port, "443") {
 					filteredPorts = append(filteredPorts, port)
 				}
