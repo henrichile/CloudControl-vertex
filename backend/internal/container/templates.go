@@ -139,7 +139,7 @@ var stacks = map[string]StackDefinition{
 			{
 				Name:  "frankenphp",
 				Image: "dunglas/frankenphp:php8.3-alpine",
-				Ports: []string{"{{.AppPort}}:80", "443:443", "443:443/udp"},
+				Ports: []string{"{{.AppPort}}:80"},
 				Environment: []string{
 					"SERVER_NAME=:80",
 					"WORDPRESS_DB_HOST=mysql",
@@ -154,13 +154,12 @@ var stacks = map[string]StackDefinition{
 					"PHP_INI_SCAN_DIR=/usr/local/etc/php/conf.d",
 				},
 				DependsOn: []string{"mysql", "redis"},
-				Command: "sh /docker-init.sh",
 				Volumes: []string{
 					"wp_data:/app/public",
 					"./docker/frankenphp/Caddyfile:/etc/caddy/Caddyfile:ro",
 					"./docker/php/opcache.ini:/usr/local/etc/php/conf.d/opcache.ini:ro",
 					"./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini:ro",
-					"./docker/frankenphp/init.sh:/docker-init.sh:ro",
+					"./docker/frankenphp/wp-config.php:/app/public/wp-config.php:ro",
 				},
 				Restart: "unless-stopped",
 			},
